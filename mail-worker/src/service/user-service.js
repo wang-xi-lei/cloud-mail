@@ -353,6 +353,12 @@ const userService = {
 			.where(eq(user.regKeyId, regKeyId))
 			.orderBy(desc(user.userId))
 			.all();
+	},
+
+	async checkEmailExists(c, params) {
+		const { email } = params;
+		const accountRow = await accountService.selectByEmailIncludeDel(c, email);
+		return !!accountRow;
 	}
 };
 

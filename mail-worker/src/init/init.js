@@ -6,11 +6,27 @@ import { t } from '../i18n/i18n'
 const init = {
 	async init(c) {
 
-		const secret = c.req.param('secret');
-
-		if (secret !== c.env.jwt_secret) {
-			return c.text(t('JWTMismatch'));
+		// 检查是否已经初始化过
+		const isInitialized = await this.checkInitialized(c);
+		if (isInitialized) {
+			return c.text(t('alreadyInitialized'), 400);
 		}
+
+		// 验证初始化密钥（使用POST请求体而不是URL参数）
+		const body = await c.req.json().catch(() => ({}));
+		const { secret, confirmInit } = body;
+
+		if (!secret || secret !== c.env.jwt_secret) {
+			return c.text(t('JWTMismatch'), 401);
+		}
+
+		// 需要明确确认初始化操作
+		if (confirmInit !== true) {
+			return c.text(t('initConfirmRequired'), 400);
+		}
+
+		// 记录初始化操作
+		console.log(`[INIT] Database initialization started at ${new Date().toISOString()}`);
 
 		await this.intDB(c);
 		await this.v1_1DB(c);
@@ -22,7 +38,13 @@ const init = {
 		await this.v1_6DB(c);
 		await this.v1_7DB(c);
 		await this.v2DB(c);
+		await this.v2_1DB(c);
 		await settingService.refresh(c);
+
+		// 标记初始化完成
+		await this.markInitialized(c);
+
+		console.log(`[INIT] Database initialization completed at ${new Date().toISOString()}`);
 		return c.text(t('initSuccess'));
 	},
 
@@ -38,6 +60,18 @@ const init = {
 			]);
 		} catch (e) {
 			console.error(e.message)
+		}
+	},
+
+	async v2_1DB(c) {
+		// 添加账户改名权限
+		try {
+			await c.env.db.prepare(`
+				INSERT INTO perm (perm_id, name, perm_key, pid, type, sort) VALUES
+				(37, '邮箱改名', 'account:rename', 21, 2, 3)
+			`).run();
+		} catch (e) {
+			console.warn(`跳过权限添加，原因：${e.message}`);
 		}
 	},
 
@@ -531,6 +565,39 @@ const init = {
 		})
 
 		await c.env.db.batch(queryList);
+	},
+
+	// 检查是否已经初始化
+	async checkInitialized(c) {
+		try {
+			// 检查是否存在初始化标记
+			const initRecord = await c.env.kv.get('SYSTEM_INITIALIZED');
+			if (initRecord) {
+				return true;
+			}
+
+			// 备用检查：检查是否存在基础数据
+			const { permCount } = await c.env.db.prepare(`SELECT COUNT(*) as permCount FROM perm`).first();
+			const { roleCount } = await c.env.db.prepare(`SELECT COUNT(*) as roleCount FROM role`).first();
+
+			// 如果权限和角色数据都存在，说明已经初始化过了
+			return permCount > 0 && roleCount > 0;
+		} catch (e) {
+			// 如果表不存在，说明还没初始化
+			return false;
+		}
+	},
+
+	// 标记系统已初始化
+	async markInitialized(c) {
+		const initInfo = {
+			timestamp: new Date().toISOString(),
+			version: '2.1',
+			ip: c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown'
+		};
+
+		// 在KV中存储初始化标记，永不过期
+		await c.env.kv.put('SYSTEM_INITIALIZED', JSON.stringify(initInfo));
 	}
 };
 export default init;

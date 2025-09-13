@@ -42,3 +42,8 @@ app.put('/user/restore', async (c) => {
 	await userService.restore(c, await c.req.json());
 	return c.json(result.ok());
 });
+
+app.get('/user/checkEmail', async (c) => {
+	const exists = await userService.checkEmailExists(c, c.req.query());
+	return c.json(result.ok({ exists }));
+});

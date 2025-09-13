@@ -27,4 +27,4 @@ id = "2io01d4b299e481b9de060ece9e7785c"
 orm_log = false
 domain = ["example.com", "example2.com", "example3.com", "example4.com"]
 admin = "admin@example.com"
-jwt_secret = "b7f29a1d-18e2-4d3b-941f-f6b2c97c02fd"
+jwt_secret = "4c590a0b-c444-4b72-936b-4d2169d238a0"

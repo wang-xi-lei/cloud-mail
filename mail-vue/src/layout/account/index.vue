@@ -23,7 +23,7 @@
                 <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}
+                    <el-dropdown-item v-if="hasPerm('account:rename')" @click="openSetName(item)">{{ $t('rename') }}
                     </el-dropdown-item>
                     <el-dropdown-item v-if="item.accountId !== userStore.user.accountId && hasPerm('account:delete')"
                                       @click="remove(item)">{{ $t('delete') }}
@@ -256,7 +256,7 @@ function openSetName(accountItem) {
 }
 
 function showNullSetting(item) {
-  return !hasPerm('email:send') && !(item.accountId !== userStore.user.accountId && hasPerm('account:delete'))
+  return !hasPerm('account:rename') && !(item.accountId !== userStore.user.accountId && hasPerm('account:delete'))
 }
 
 function itemBg(accountId) {

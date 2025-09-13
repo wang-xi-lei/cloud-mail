@@ -14,7 +14,12 @@ export default {
 		}
 
 
+		// 在开发环境下，如果 assets 不存在，返回一个简单的响应
+	if (env.assets) {
 		return env.assets.fetch(req);
+	} else {
+		return new Response('Development mode - assets not available', { status: 404 });
+	}
 	},
 	email: email,
 	async scheduled(c, env, ctx) {

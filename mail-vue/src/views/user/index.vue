@@ -205,33 +205,66 @@
     </el-dialog>
     <el-dialog v-model="showAdd" :title="$t('addUser')">
       <div class="container">
-        <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-          <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+        <!-- 邮箱名输入框 -->
+        <div class="input-group">
+          <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+            <template #append>
+              <div @click.stop="openSelect">
+                <el-select
+                    ref="mySelect"
+                    v-model="addForm.suffix"
+                    :placeholder="$t('select')"
+                    class="select"
+                >
+                  <el-option
+                      v-for="item in domainList"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                  />
+                </el-select>
+                <div>
+                  <span>{{ addForm.suffix }}</span>
+                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                </div>
               </div>
-            </div>
-          </template>
-        </el-input>
-        <el-input type="password" v-model="addForm.password" :placeholder="$t('password')"/>
-        <el-select v-model="addForm.type" :placeholder="$t('perm')">
+            </template>
+          </el-input>
+          <el-button type="default" @click="generateRandomEmail" :loading="emailGenerating" class="generate-btn">
+            <Icon icon="mdi:dice-6" width="16" height="16" style="margin-right: 4px"/>
+            {{ $t('randomGenerate') }}
+          </el-button>
+        </div>
+
+        <!-- 密码输入框 -->
+        <div class="input-group">
+          <el-input
+            v-model="addForm.password"
+            :type="passwordVisible ? 'text' : 'password'"
+            :placeholder="$t('password')"
+            autocomplete="off"
+          >
+            <template #suffix>
+              <Icon
+                :icon="passwordVisible ? 'mdi:eye-off' : 'mdi:eye'"
+                width="16"
+                height="16"
+                @click="passwordVisible = !passwordVisible"
+                style="cursor: pointer; color: #909399;"
+              />
+            </template>
+          </el-input>
+          <el-button type="default" @click="generateRandomPassword" class="generate-btn">
+            <Icon icon="mdi:dice-6" width="16" height="16" style="margin-right: 4px"/>
+            {{ $t('randomGenerate') }}
+          </el-button>
+        </div>
+
+        <!-- 角色选择 -->
+        <el-select v-model="addForm.type" :placeholder="$t('perm')" class="role-select">
           <el-option v-for="item in roleList" :label="item.name" :value="item.roleId" :key="item.roleId"/>
         </el-select>
+
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
         </el-button>
@@ -249,7 +282,9 @@ import {
   userSetStatus,
   userSetType,
   userAdd,
-  userRestSendCount, userRestore
+  userRestSendCount,
+  userRestore,
+  userCheckEmail
 } from '@/request/user.js'
 import {roleSelectUse} from "@/request/role.js";
 import {Icon} from "@iconify/vue";
@@ -260,6 +295,7 @@ import {isEmail} from "@/utils/verify-utils.js";
 import {useRoleStore} from "@/store/role.js";
 import {useUserStore} from "@/store/user.js";
 import {useI18n} from 'vue-i18n';
+import {generateSecureEmailName, generateSecurePassword} from '@/utils/random-utils.js';
 
 defineOptions({
   name: 'user'
@@ -324,9 +360,19 @@ const roleList = reactive([])
 const mySelect = ref({})
 const key = ref(0)
 
+// 新增的变量
+const passwordVisible = ref(false)
+const emailGenerating = ref(false)
+
 roleSelectUse().then(list => {
   roleList.length = 0
   roleList.push(...list)
+
+  // 设置默认选中"普通用户"角色
+  const defaultRole = list.find(role => role.isDefault === 1)
+  if (defaultRole && !addForm.type) {
+    addForm.type = defaultRole.roleId
+  }
 })
 
 const paramsStar = localStorage.getItem('user-params')
@@ -442,11 +488,82 @@ const openSelect = () => {
   mySelect.value.toggleMenu()
 }
 
+// 生成随机邮箱名
+async function generateRandomEmail() {
+  emailGenerating.value = true
+
+  try {
+    let emailName = generateSecureEmailName()
+    let attempts = 0
+    const maxAttempts = 10
+
+    // 检查邮箱是否已存在，如果存在则重新生成
+    while (attempts < maxAttempts) {
+      const fullEmail = emailName + addForm.suffix
+      const result = await userCheckEmail(fullEmail)
+
+      if (!result.exists) {
+        addForm.email = emailName
+        ElMessage({
+          message: t('emailGeneratedMsg'),
+          type: 'success',
+          plain: true
+        })
+        break
+      }
+
+      emailName = generateSecureEmailName()
+      attempts++
+    }
+
+    if (attempts >= maxAttempts) {
+      ElMessage({
+        message: t('emailGenerateFailMsg'),
+        type: 'warning',
+        plain: true
+      })
+    }
+  } catch (error) {
+    console.error('生成邮箱名失败:', error)
+    ElMessage({
+      message: t('emailGenerateFailMsg'),
+      type: 'error',
+      plain: true
+    })
+  } finally {
+    emailGenerating.value = false
+  }
+}
+
+// 生成随机密码
+function generateRandomPassword() {
+  try {
+    const password = generateSecurePassword()
+    addForm.password = password
+    ElMessage({
+      message: t('passwordGeneratedMsg'),
+      type: 'success',
+      plain: true
+    })
+  } catch (error) {
+    console.error('生成密码失败:', error)
+    ElMessage({
+      message: t('passwordGenerateFailMsg'),
+      type: 'error',
+      plain: true
+    })
+  }
+}
+
 function resetAddForm() {
   addForm.email = ''
   addForm.suffix = settingStore.domainList[0]
-  addForm.type = null
   addForm.password = ''
+  passwordVisible.value = false
+
+  // 重置为默认角色
+  const defaultRole = roleList.find(role => role.isDefault === 1)
+  addForm.type = defaultRole ? defaultRole.roleId : null
 }
 
 function openAdd() {
@@ -966,6 +1083,37 @@ function adjustWidth() {
   top: 6px;
 }
 
+/* 新增的样式 */
+.input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+  align-items: flex-start;
+}
+
+.input-group .el-input {
+  flex: 1;
+}
+
+.generate-btn {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.generate-btn:hover {
+  background-color: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+  color: var(--el-color-primary);
+}
+
+.role-select {
+  width: 100%;
+  margin-bottom: 15px;
+}
 
 .btn {
   width: 100%;

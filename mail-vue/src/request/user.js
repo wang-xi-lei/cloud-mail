@@ -33,3 +33,7 @@ export function userRestSendCount(userId) {
 export function userRestore(userId,type) {
     return http.put('/user/restore', {userId,type})
 }
+
+export function userCheckEmail(email) {
+    return http.get('/user/checkEmail', {params: {email}})
+}
